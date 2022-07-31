@@ -108,6 +108,27 @@ void testFetchSingleAppFail() {
   ESP_LOGI(TAG, "testFetchSingleAppFail()... SUCCESS");
 }
 
+void testFetchMultipleApps() {
+  ESP_LOGI(TAG, "testFetchMultipleApps()...");
+
+  std::vector<RsApp> apps;
+  auto success = rs.FetchApps(0, 5, &apps);
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading apps failed.");
+    return;
+  }
+  if (apps.size() != 5) {
+    ESP_LOGE(TAG, "Expected 5 apps, only got %d", apps.size());
+    return;
+  }
+  for (const auto& app : apps) {
+    ESP_LOGI(TAG, "Got app: [%s] - %s ", app.id.c_str(), app.name.c_str());
+  }
+
+  ESP_LOGI(TAG, "testFetchMultipleApps()... SUCCESS");
+}
+
+
 void initWifi() {
   ESP_LOGI(TAG, "Connecting to Wifi...");
   auto* wifi = new Wifi();
@@ -123,9 +144,10 @@ void runAllTests() {
     testFailDownloadSystemImage();
     testFetchSingleApp();
     testFetchSingleAppFail();
+    testFetchMultipleApps();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
-    ESP_LOGI(TAG, "After run [%d], free heap is %d, diff: %d", i, newFreeHeapKb, diffHeapKb);
+    ESP_LOGI(TAG, "After run [%d], free heap is %d, total diff is %d kb", i, newFreeHeapKb, diffHeapKb);
   }
 
   ESP_LOGI(TAG, "DONE. All tests run.");
