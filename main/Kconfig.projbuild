@@ -1,0 +1,15 @@
+menu "RetroStore Config"
+
+    config RS_TEST_WIFI_SSID
+        string "WiFi SSID"
+        default ""
+        help
+            SSID (network name) for the RetroStore Test to connect to.
+
+    config RS_TEST_WIFI_PASSWORD
+        string "WiFi Password"
+        default ""
+        help
+            WiFi password (WPA or WPA2) for the RetroStore Test to use.
+
+endmenu
