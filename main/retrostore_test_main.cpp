@@ -19,7 +19,7 @@
 #include "retrostore.h"
 #include "wifi.h"
 
-#define NUM_TEST_ITERATIONS 1  // FIXME change back to 10.
+#define NUM_TEST_ITERATIONS 10
 
 static const char *TAG = "retrostore-tester";
 ESP_EVENT_DEFINE_BASE(WINSTON_EVENT);
@@ -41,7 +41,9 @@ void testUploadDownloadSystemImage() {
   auto success = rs.DownloadState(token, &state);
   if (!success) {
     ESP_LOGE(TAG, "FAILED: Downloading state");
+    return;
   }
+  ESP_LOGI(TAG, "testUploadDownloadSystemImage()...SUCCESS");
 }
 
 void testFailDownloadSystemImage() {
@@ -51,7 +53,9 @@ void testFailDownloadSystemImage() {
   auto success = rs.DownloadState(12345, &state);  // non-existent token.
   if (success) {
     ESP_LOGE(TAG, "ERROR: Downloading state should have failed but did not.");
+    return;
   }
+  ESP_LOGI(TAG, "testFailDownloadSystemImage()...SUCCESS");
 }
 
 void testFetchSingleApp() {
@@ -88,6 +92,20 @@ void testFetchSingleApp() {
       ESP_LOGE(TAG, "Screenshot URL invalid: %s", url.c_str());
     }
   }
+  ESP_LOGI(TAG, "testFetchSingleApp()...SUCCESS");
+}
+
+void testFetchSingleAppFail() {
+  ESP_LOGI(TAG, "testFetchSingleAppFail()...");
+  const auto NON_EXISTENT_ID = "a2729dec_XXXX_11e7-9539-e7341c560175";
+
+  RsApp app;
+  auto success = rs.FetchApp(NON_EXISTENT_ID, &app);
+  if (success) {
+    ESP_LOGE(TAG, "Downloading app should have failed.");
+    return;
+  }
+  ESP_LOGI(TAG, "testFetchSingleAppFail()... SUCCESS");
 }
 
 void initWifi() {
@@ -101,9 +119,10 @@ void runAllTests() {
   ESP_LOGI(TAG, "RetroStore API tests running... Initial free heap: %d", initialFreeHeapKb);
 
   for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
-    // testUploadDownloadSystemImage();
-    // testFailDownloadSystemImage();
+    testUploadDownloadSystemImage();
+    testFailDownloadSystemImage();
     testFetchSingleApp();
+    testFetchSingleAppFail();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, diff: %d", i, newFreeHeapKb, diffHeapKb);
