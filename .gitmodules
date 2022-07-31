@@ -1,0 +1,3 @@
+[submodule "components/retrostore-c-sdk"]
+	path = components/retrostore-c-sdk
+	url = https://github.com/shaeberling/retrostore-c-sdk
