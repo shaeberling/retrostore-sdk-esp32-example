@@ -1,5 +1,5 @@
 # retrostore-sdk-esp32-example
-An example ESP32 IDF pplication that uses the RetroStore C++ SDK
+An example ESP32 IDF application that uses the RetroStore C++ SDK
 
 ## Checking out
 This project uses git submodules. Make sure you check out using the following command:
