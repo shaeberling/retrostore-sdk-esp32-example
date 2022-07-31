@@ -19,6 +19,8 @@
 #include "retrostore.h"
 #include "wifi.h"
 
+#define NUM_TEST_ITERATIONS 10
+
 static const char *TAG = "retrostore-tester";
 ESP_EVENT_DEFINE_BASE(WINSTON_EVENT);
 
@@ -36,7 +38,20 @@ void testUploadDownloadSystemImage() {
   int token = 646;
 
   RsSystemState state;
-  rs.downloadState(token, &state);
+  auto success = rs.DownloadState(token, &state);
+  if (!success) {
+    ESP_LOGE(TAG, "FAILED: Downloading state");
+  }
+}
+
+void testFailDownloadSystemImage() {
+  ESP_LOGI(TAG, "testFailDownloadSystemImage()...");
+
+  RsSystemState state;
+  auto success = rs.DownloadState(12345, &state);  // non-existent token.
+  if (success) {
+    ESP_LOGE(TAG, "ERROR: Downloading state should have failed but did not.");
+  }
 }
 
 void initWifi() {
@@ -49,8 +64,9 @@ void runAllTests() {
   auto initialFreeHeapKb = esp_get_free_heap_size() / 1024;
   ESP_LOGI(TAG, "RetroStore API tests running... Initial free heap: %d", initialFreeHeapKb);
 
-  for (int i = 0; i < 10; ++i) {
+  for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
     testUploadDownloadSystemImage();
+    testFailDownloadSystemImage();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, diff: %d", i, newFreeHeapKb, diffHeapKb);
