@@ -19,7 +19,7 @@
 #include "retrostore.h"
 #include "wifi.h"
 
-#define NUM_TEST_ITERATIONS 10
+#define NUM_TEST_ITERATIONS 1  // FIXME change back to 10.
 
 static const char *TAG = "retrostore-tester";
 ESP_EVENT_DEFINE_BASE(WINSTON_EVENT);
@@ -54,6 +54,42 @@ void testFailDownloadSystemImage() {
   }
 }
 
+void testFetchSingleApp() {
+  ESP_LOGI(TAG, "testFetchSingleApp()...");
+  const auto DONKEY_KONG_ID = "a2729dec-96b3-11e7-9539-e7341c560175";
+
+  RsApp app;
+  auto success = rs.FetchApp(DONKEY_KONG_ID, &app);
+  if (!success) {
+    ESP_LOGE(TAG, "FAILED: Downloading app.");
+    return;
+  }
+
+  if (app.id != DONKEY_KONG_ID) {
+    ESP_LOGE(TAG, "FAILED: Returned app has the wrong key. Was: %s", app.id.c_str());
+  }
+  if (app.name != "Donkey Kong") {
+    ESP_LOGE(TAG, "FAILED: App's name does not match. Was: %s", app.name.c_str());
+  }
+  if (app.release_year != 1981) {
+    ESP_LOGE(TAG, "FAILED: Release year does not match. Was: %d", app.release_year);
+  }
+  if (app.author != "Wayne Westmoreland and Terry Gilman") {
+    ESP_LOGE(TAG, "FAILED: Author does not match. Was: %s", app.author.c_str());
+  }
+  if (app.model != RsTrs80Model_MODEL_III) {
+    ESP_LOGE(TAG, "FAILED: Model does not match. Was: %d", app.model);
+  }
+  if (app.screenshot_urls.size() == 0) {
+    ESP_LOGE(TAG, "FAILED: App has no screenshots.");
+  }
+  for (auto& url : app.screenshot_urls) {
+    if (url.rfind("https://", 0) != 0) {
+      ESP_LOGE(TAG, "Screenshot URL invalid: %s", url.c_str());
+    }
+  }
+}
+
 void initWifi() {
   ESP_LOGI(TAG, "Connecting to Wifi...");
   auto* wifi = new Wifi();
@@ -65,8 +101,9 @@ void runAllTests() {
   ESP_LOGI(TAG, "RetroStore API tests running... Initial free heap: %d", initialFreeHeapKb);
 
   for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
-    testUploadDownloadSystemImage();
-    testFailDownloadSystemImage();
+    // testUploadDownloadSystemImage();
+    // testFailDownloadSystemImage();
+    testFetchSingleApp();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, diff: %d", i, newFreeHeapKb, diffHeapKb);
