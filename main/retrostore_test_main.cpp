@@ -128,6 +128,32 @@ void testFetchMultipleApps() {
   ESP_LOGI(TAG, "testFetchMultipleApps()... SUCCESS");
 }
 
+void testQueryApps() {
+  ESP_LOGI(TAG, "testQueryApps()...");
+
+  std::vector<RsApp> apps;
+  auto success = rs.FetchApps(0, 1, "Weerd", &apps);
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading apps failed.");
+    return;
+  }
+  if (apps.size() != 1) {
+    ESP_LOGE(TAG, "Expected one app, but got %d", apps.size());
+    return;
+  }
+
+  if (apps[0].name != "Weerd") {
+    ESP_LOGE(TAG, "Queried app name not as expected: %s", apps[0].name.c_str());
+    return;
+  }
+
+  if (apps[0].id != "59a9ea84-e52c-11e8-9abc-ab7e2ee8e918") {
+    ESP_LOGE(TAG, "Queried app ID not as expected: %s", apps[0].id.c_str());
+    return;
+  }
+  ESP_LOGI(TAG, "testQueryApps()... SUCCESS");
+}
+
 
 void initWifi() {
   ESP_LOGI(TAG, "Connecting to Wifi...");
@@ -145,6 +171,7 @@ void runAllTests() {
     testFetchSingleApp();
     testFetchSingleAppFail();
     testFetchMultipleApps();
+    testQueryApps();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, total diff is %d kb", i, newFreeHeapKb, diffHeapKb);
