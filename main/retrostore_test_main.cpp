@@ -6,6 +6,7 @@
    software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
    CONDITIONS OF ANY KIND, either express or implied.
 */
+#include <cstdlib>
 #include <stdio.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -33,16 +34,71 @@ RetroStore rs;
 
 void testUploadDownloadSystemImage() {
   ESP_LOGI(TAG, "testUploadDownloadSystemImage()...");
-  // TODO: Upload a system image for testing ...
-  // TODO. Replace this hardcoded token with the one we got from the upload.
-  int token = 646;
+  // Create a random state to upload.
+  RsSystemState state1;
+  state1.model = RsTrs80Model_MODEL_4;
+  state1.registers.af = 12;
+  state1.registers.sp = 23;
+  state1.registers.de = 34;
+  state1.registers.hl_prime = 45;
+  state1.registers.i = 56;
+  state1.registers.r_2 = 67;
 
-  RsSystemState state;
-  auto success = rs.DownloadState(token, &state);
-  if (!success) {
+  for (int i = 0; i < 1; ++i) {
+    RsMemoryRegion region;
+    region.start = rand() % 1000 + 1;
+    region.length = 1024;
+    std::unique_ptr<uint8_t> data(static_cast<uint8_t*>(malloc(sizeof(uint8_t) * 1024)));
+    for (int d = 0; d < region.length; ++d) {
+      data.get()[d] = rand() % 256;
+    }
+    region.data = std::move(data);
+    state1.regions.push_back(std::move(region));
+  }
+
+  int token = rs.UploadState(state1);
+  if (token < 100 || token > 999) {
+    ESP_LOGE(TAG, "FAILED: Non-valid token: %d", token);
+    return;
+  }
+  ESP_LOGI(TAG, "Got token: %d", token);
+
+  RsSystemState state2;
+  if (!rs.DownloadState(token, &state2)) {
     ESP_LOGE(TAG, "FAILED: Downloading state");
     return;
   }
+
+  // Compare the two states, they should be the same.
+  if (state1.model != state2.model) ESP_LOGE(TAG, "FAILED: 'model' is different");
+  if (state1.registers.af != state2.registers.af) ESP_LOGE(TAG, "FAILED: 'af' is different");
+  if (state1.registers.sp != state2.registers.sp) ESP_LOGE(TAG, "FAILED: 'sp' is different");
+  if (state1.registers.de != state2.registers.de) ESP_LOGE(TAG, "FAILED: 'de' is different");
+  if (state1.registers.hl_prime != state2.registers.hl_prime) ESP_LOGE(TAG, "FAILED: 'hl_prime' is different");
+  if (state1.registers.i != state2.registers.i) ESP_LOGE(TAG, "FAILED: 'i' is different");
+  if (state1.registers.r_2 != state2.registers.r_2) ESP_LOGE(TAG, "FAILED: 'r_2' is different");
+
+  bool success = true;
+  for (int i = 0; i < state2.regions.size(); ++i) {
+    if (state1.regions[i].start != state2.regions[i].start) {
+      ESP_LOGE(TAG, "Start of memory region %d does not match.", i);
+      success = false;
+    }
+    if (state1.regions[i].length != state2.regions[i].length) {
+      ESP_LOGE(TAG, "Start of memory region %d does not match.", i);
+      success = false;
+    }
+
+    for (int d = 0; d < state1.regions[i].length; ++d) {
+      if (state1.regions[i].data.get()[d] != state2.regions[i].data.get()[d]) {
+        ESP_LOGE(TAG, "Memory region %d differs first at %d", i, d);
+        success = false;
+        break;
+      }
+    }
+  }
+  if (!success) return;
+
   ESP_LOGI(TAG, "testUploadDownloadSystemImage()...SUCCESS");
 }
 
@@ -164,6 +220,7 @@ void initWifi() {
 void runAllTests() {
   auto initialFreeHeapKb = esp_get_free_heap_size() / 1024;
   ESP_LOGI(TAG, "RetroStore API tests running... Initial free heap: %d", initialFreeHeapKb);
+  srand(time(nullptr));
 
   for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
     testUploadDownloadSystemImage();
