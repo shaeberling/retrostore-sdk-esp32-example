@@ -184,6 +184,26 @@ void testFetchMultipleApps() {
   ESP_LOGI(TAG, "testFetchMultipleApps()... SUCCESS");
 }
 
+void testFetchMultipleAppsNano() {
+  ESP_LOGI(TAG, "testFetchMultipleAppsNano()...");
+
+  std::vector<RsAppNano> apps;
+  auto success = rs.FetchAppsNano(0, 5, &apps);
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading apps (nano) failed.");
+    return;
+  }
+  if (apps.size() != 5) {
+    ESP_LOGE(TAG, "Expected 5 apps (nano), only got %d", apps.size());
+    return;
+  }
+  for (const auto& app : apps) {
+    ESP_LOGI(TAG, "Got app: [%s] - %s ", app.id.c_str(), app.name.c_str());
+  }
+
+  ESP_LOGI(TAG, "testFetchMultipleAppsNano()... SUCCESS");
+}
+
 void testQueryApps() {
   ESP_LOGI(TAG, "testQueryApps()...");
 
@@ -210,6 +230,33 @@ void testQueryApps() {
   ESP_LOGI(TAG, "testQueryApps()... SUCCESS");
 }
 
+void testQueryAppsNano() {
+  ESP_LOGI(TAG, "testQueryAppsNano()...");
+
+  std::vector<RsAppNano> apps;
+  auto success = rs.FetchAppsNano(0, 1, "Weerd", &apps);
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading apps (nano) failed.");
+    return;
+  }
+  if (apps.size() != 1) {
+    ESP_LOGE(TAG, "Expected one app (nano), but got %d", apps.size());
+    return;
+  }
+
+  if (apps[0].name != "Weerd") {
+    ESP_LOGE(TAG, "Queried app name not as expected: %s", apps[0].name.c_str());
+    return;
+  }
+
+  if (apps[0].id != "59a9ea84-e52c-11e8-9abc-ab7e2ee8e918") {
+    ESP_LOGE(TAG, "Queried app ID not as expected: %s", apps[0].id.c_str());
+    return;
+  }
+  ESP_LOGI(TAG, "testQueryAppsNano()... SUCCESS");
+}
+
+
 
 void initWifi() {
   ESP_LOGI(TAG, "Connecting to Wifi...");
@@ -229,6 +276,8 @@ void runAllTests() {
     testFetchSingleAppFail();
     testFetchMultipleApps();
     testQueryApps();
+    testFetchMultipleAppsNano();
+    testQueryAppsNano();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, total diff is %d kb", i, newFreeHeapKb, diffHeapKb);
