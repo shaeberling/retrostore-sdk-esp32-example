@@ -256,6 +256,39 @@ void testQueryAppsNano() {
   ESP_LOGI(TAG, "testQueryAppsNano()... SUCCESS");
 }
 
+void testFetchMediaImages() {
+  ESP_LOGI(TAG, "testFetchMediaImages()...");
+
+  const std::string BREAKDOWN_ID("29b20252-680f-11e8-b4a9-1f10b5491ef5");
+  std::vector<RsMediaType> types;
+  types.push_back(RsMediaType_COMMAND);
+
+  std::vector<RsMediaImage> images;
+  auto success = rs.FetchMediaImages(BREAKDOWN_ID, types, &images);
+
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading apps (nano) failed.");
+    return;
+  }
+
+  if (images.size() != 1) {
+    ESP_LOGE(TAG, "Expected 1 media image of type COMMAND, but got %d", images.size());
+    return;
+  }
+  if (images[0].filename != "command.CMD") {
+    ESP_LOGE(TAG, "Queries media image filename not as expected: %s", images[0].filename.c_str());
+    return;
+  }
+
+  ESP_LOGI(TAG, "Media image size is: %d", images[0].data_size);
+  if (images[0].data_size <= 0) {
+    ESP_LOGE(TAG, "Data size of media image is zero: %d", images[0].data_size);
+    return;
+  }
+  ESP_LOGI(TAG, "testFetchMediaImages()... SUCCESS");
+}
+
+
 
 
 void initWifi() {
@@ -278,6 +311,7 @@ void runAllTests() {
     testQueryApps();
     testFetchMultipleAppsNano();
     testQueryAppsNano();
+    testFetchMediaImages();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, total diff is %d kb", i, newFreeHeapKb, diffHeapKb);
