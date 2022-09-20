@@ -182,6 +182,7 @@ void testFetchMultipleApps() {
   }
   for (const auto& app : apps) {
     ESP_LOGI(TAG, "Got app: [%s] - %s ", app.id.c_str(), app.name.c_str());
+    ESP_LOGI(TAG, "Descriptions\n\"%s\" ", app.description.c_str());
   }
 
   ESP_LOGI(TAG, "testFetchMultipleApps()... SUCCESS");
