@@ -7,7 +7,10 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <cstdlib>
+#include <set>
 #include <stdio.h>
+#include <vector>
+
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -230,11 +233,77 @@ void testQueryApps() {
   ESP_LOGI(TAG, "testQueryApps()... SUCCESS");
 }
 
+void testQueryAppsWithMediaTypes() {
+  ESP_LOGI(TAG, "testQueryAppsWithMediaTypes()...");
+
+  {
+    std::vector<RsAppNano> appsNoFilter;
+    std::vector<RsMediaType> hasTypes;  // empty.
+    auto success = rs.FetchAppsNano(0, 10, "ldos OR donkey", hasTypes, &appsNoFilter);
+    if (!success) {
+      ESP_LOGE(TAG, "Downloading apps failed.");
+      return;
+    }
+    std::set<std::string> appNamesNoFilter;
+    for (int i = 0; i < appsNoFilter.size(); ++i) {
+      ESP_LOGI(TAG, "Found app '%s'", appsNoFilter[i].name.c_str());
+      appNamesNoFilter.insert(appsNoFilter[i].name);
+    }
+
+    if (appNamesNoFilter.find("Donkey Kong") == appNamesNoFilter.end()) {
+      ESP_LOGE(TAG, "Donkey Kong not found.");
+      return;
+    }
+    if (appNamesNoFilter.find("LDOS - Model I") == appNamesNoFilter.end()) {
+      ESP_LOGE(TAG, "LDOS - Model I not found.");
+      return;
+    }
+    if (appNamesNoFilter.find("LDOS - Model III") == appNamesNoFilter.end()) {
+      ESP_LOGE(TAG, "LDOS - Model III not found.");
+      return;
+    }
+  }
+
+  // Next we use the same query, but add the need to have a CMD, which
+  // the LDOS entries do not have, but Donkey Kong does.
+  {
+    std::vector<RsAppNano> appsWithFilter;
+    std::vector<RsMediaType> hasTypes;
+    hasTypes.push_back(RsMediaType_COMMAND);
+    auto success = rs.FetchAppsNano(0, 10, "ldos OR donkey", hasTypes, &appsWithFilter);
+    if (!success) {
+      ESP_LOGE(TAG, "Downloading apps failed.");
+      return;
+    }
+    std::set<std::string> appNamesWithFilter;
+    for (int i = 0; i < appsWithFilter.size(); ++i) {
+      ESP_LOGI(TAG, "Found app '%s'", appsWithFilter[i].name.c_str());
+      appNamesWithFilter.insert(appsWithFilter[i].name);
+    }
+
+    if (appNamesWithFilter.find("Donkey Kong") == appNamesWithFilter.end()) {
+      ESP_LOGE(TAG, "Donkey Kong not found.");
+      return;
+    }
+    if (appNamesWithFilter.find("LDOS - Model I") != appNamesWithFilter.end()) {
+      ESP_LOGE(TAG, "LDOS - Model I found, but should NOT be found.");
+      return;
+    }
+    if (appNamesWithFilter.find("LDOS - Model III") != appNamesWithFilter.end()) {
+      ESP_LOGE(TAG, "LDOS - Model III found, but should NOT be found.");
+      return;
+    }
+  }
+
+  ESP_LOGI(TAG, "testQueryAppsWithMediaTypes()... SUCCESS");
+}
+
 void testQueryAppsNano() {
   ESP_LOGI(TAG, "testQueryAppsNano()...");
 
   std::vector<RsAppNano> apps;
-  auto success = rs.FetchAppsNano(0, 1, "Weerd", &apps);
+  std::vector<RsMediaType> hasType;  // empty
+  auto success = rs.FetchAppsNano(0, 1, "Weerd", hasType, &apps);
   if (!success) {
     ESP_LOGE(TAG, "Downloading apps (nano) failed.");
     return;
@@ -290,7 +359,6 @@ void testFetchMediaImages() {
 
 
 
-
 void initWifi() {
   ESP_LOGI(TAG, "Connecting to Wifi...");
   auto* wifi = new Wifi();
@@ -309,6 +377,7 @@ void runAllTests() {
     testFetchSingleAppFail();
     testFetchMultipleApps();
     testQueryApps();
+    testQueryAppsWithMediaTypes();
     testFetchMultipleAppsNano();
     testQueryAppsNano();
     testFetchMediaImages();
