@@ -35,17 +35,14 @@ using namespace retrostore;
 RetroStore rs;
 
 
-void testUploadDownloadSystemImage() {
-  ESP_LOGI(TAG, "testUploadDownloadSystemImage()...");
-  // Create a random state to upload.
-  RsSystemState state1;
-  state1.model = RsTrs80Model_MODEL_4;
-  state1.registers.af = 12;
-  state1.registers.sp = 23;
-  state1.registers.de = 34;
-  state1.registers.hl_prime = 45;
-  state1.registers.i = 56;
-  state1.registers.r_2 = 67;
+void createRandomTestState(RsSystemState* state) {
+  state->model = RsTrs80Model_MODEL_4;
+  state->registers.af = 12;
+  state->registers.sp = 23;
+  state->registers.de = 34;
+  state->registers.hl_prime = 45;
+  state->registers.i = 56;
+  state->registers.r_2 = 67;
 
   for (int i = 0; i < 1; ++i) {
     RsMemoryRegion region;
@@ -56,8 +53,15 @@ void testUploadDownloadSystemImage() {
       data.get()[d] = rand() % 256;
     }
     region.data = std::move(data);
-    state1.regions.push_back(std::move(region));
+    state->regions.push_back(std::move(region));
   }
+}
+
+void testUploadDownloadSystemState() {
+  ESP_LOGI(TAG, "testUploadDownloadSystemState()...");
+  // Create a random state to upload.
+  RsSystemState state1;
+  createRandomTestState(&state1);
 
   int token = rs.UploadState(state1);
   if (token < 100 || token > 999) {
@@ -102,11 +106,117 @@ void testUploadDownloadSystemImage() {
   }
   if (!success) return;
 
-  ESP_LOGI(TAG, "testUploadDownloadSystemImage()...SUCCESS");
+
+  RsSystemState state3;
+  if (!rs.DownloadState(token, true /* exclude_memory_regions */, &state3)) {
+    ESP_LOGE(TAG, "FAILED: Downloading state");
+    return;
+  }
+
+  // Make sure no memory regions are returned.
+  if (state3.regions.size() > 0) {
+    ESP_LOGE(TAG, "FAILED: Downloaded state3 should NOT have memory regions.");
+    return;
+  }
+
+  ESP_LOGI(TAG, "testUploadDownloadSystemState()...SUCCESS");
 }
 
-void testFailDownloadSystemImage() {
-  ESP_LOGI(TAG, "testFailDownloadSystemImage()...");
+bool helper_downloadAndCheckRegion(int n, int token, int start, int length, const uint8_t* want) {
+  RsMemoryRegion region;
+  if (!rs.DownloadStateMemoryRange(token, start, length, &region)) {
+    ESP_LOGE(TAG, "n=%d Downloading memory regions failed.", n);
+    return false;
+  }
+  if (region.length != length) {
+    ESP_LOGE(TAG, "n=%d Received data length does not match request: %d vs %d",
+             n, region.length, length);
+    return false;
+  }
+  bool success = true;
+  for (int i = 0; i < length; ++i) {
+    if (region.data.get()[i] != want[i]) {
+      ESP_LOGE(TAG, "n=%d Recv data at idx=%d does not match. (%d vs %d)",
+              n, i, region.data.get()[i], want[i]);
+      success = false;
+    }
+  }
+  return success;
+}
+
+void testDownloadStateMemoryRegions() {
+  ESP_LOGI(TAG, "testDownloadStateMemoryRegions()...");
+  RsSystemState state;
+  state.model = RsTrs80Model_MODEL_III;
+
+  {
+    RsMemoryRegion region;
+    region.start = 1000;
+    region.length = 4;
+    std::unique_ptr<uint8_t> data(new uint8_t[4]{42, 43, 44, 45});
+    region.data = std::move(data);
+    state.regions.push_back(std::move(region));
+  }
+  {
+    RsMemoryRegion region;
+    region.start = 1100;
+    region.length = 8;
+    std::unique_ptr<uint8_t> data(new uint8_t[8]{1, 2, 3, 4, 5, 6, 7, 8});
+    region.data = std::move(data);
+    state.regions.push_back(std::move(region));
+  }
+  {
+    RsMemoryRegion region;
+    region.start = 1108;
+    region.length = 6;
+    std::unique_ptr<uint8_t> data(new uint8_t[6]{11, 22, 33, 44, 55, 66});
+    region.data = std::move(data);
+    state.regions.push_back(std::move(region));
+  }
+  {
+    RsMemoryRegion region;
+    region.start = 1120;
+    region.length = 5;
+    std::unique_ptr<uint8_t> data(new uint8_t[8]{101, 102, 103, 104, 105});
+    region.data = std::move(data);
+    state.regions.push_back(std::move(region));
+  }
+
+  // Upload the state so we can download it again and check the API.
+  int token = rs.UploadState(state);
+  if (token < 100 || token > 999) {
+    ESP_LOGE(TAG, "FAILED: Non-valid token: %d", token);
+    return;
+  }
+  ESP_LOGI(TAG, "Got token: %d", token);
+
+  // Exact match of uploads
+  uint8_t want1[] = {42, 43, 44, 45};
+  if (!helper_downloadAndCheckRegion(1, token, 1000, 4, want1)) return;
+  uint8_t want2[] = {11, 22, 33, 44, 55, 66};
+  if (!helper_downloadAndCheckRegion(2, token, 1108, 6, want2)) return;
+
+  // Requesting two connected regions at once..
+  uint8_t want3[] = {1, 2, 3, 4, 5, 6, 7, 8, 11, 22, 33, 44, 55, 66};
+  if (!helper_downloadAndCheckRegion(3, token, 1100, 14, want3)) return;
+
+  // Requesting more (padding) should result in '0'.
+  uint8_t want4[] = {0, 0, 42, 43, 44, 45, 0, 0};
+  if (!helper_downloadAndCheckRegion(4, token, 998, 8, want4)) return;
+  
+  // Request half into one.
+  uint8_t want5[] = {44, 45, 0, 0};
+  if (!helper_downloadAndCheckRegion(5, token, 1002, 4, want5)) return;
+  
+  // Request half into one across and half into another region.
+  uint8_t want6[] = {44, 55, 66, 0, 0, 0, 0, 0, 0, 101, 102, 103};
+  if (!helper_downloadAndCheckRegion(6, token, 1111, 12, want6)) return;
+
+  ESP_LOGI(TAG, "testDownloadStateMemoryRegions()...SUCCESS");
+}
+
+void testFailDownloadSystemState() {
+  ESP_LOGI(TAG, "testFailDownloadSystemState()...");
 
   RsSystemState state;
   auto success = rs.DownloadState(12345, &state);  // non-existent token.
@@ -114,7 +224,7 @@ void testFailDownloadSystemImage() {
     ESP_LOGE(TAG, "ERROR: Downloading state should have failed but did not.");
     return;
   }
-  ESP_LOGI(TAG, "testFailDownloadSystemImage()...SUCCESS");
+  ESP_LOGI(TAG, "testFailDownloadSystemState()...SUCCESS");
 }
 
 void testFetchSingleApp() {
@@ -372,8 +482,9 @@ void runAllTests() {
   srand(time(nullptr));
 
   for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
-    testUploadDownloadSystemImage();
-    testFailDownloadSystemImage();
+    testUploadDownloadSystemState();
+    testDownloadStateMemoryRegions();
+    testFailDownloadSystemState();
     testFetchSingleApp();
     testFetchSingleAppFail();
     testFetchMultipleApps();
