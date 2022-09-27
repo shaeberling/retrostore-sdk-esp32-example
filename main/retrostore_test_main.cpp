@@ -23,7 +23,7 @@
 #include "retrostore.h"
 #include "wifi.h"
 
-#define NUM_TEST_ITERATIONS 10
+#define NUM_TEST_ITERATIONS 1
 
 static const char *TAG = "retrostore-tester";
 ESP_EVENT_DEFINE_BASE(WINSTON_EVENT);
@@ -108,15 +108,23 @@ void testUploadDownloadSystemState() {
 
 
   RsSystemState state3;
-  if (!rs.DownloadState(token, true /* exclude_memory_regions */, &state3)) {
+  if (!rs.DownloadState(token, true /* exclude_memory_region_data */, &state3)) {
     ESP_LOGE(TAG, "FAILED: Downloading state");
     return;
   }
 
-  // Make sure no memory regions are returned.
-  if (state3.regions.size() > 0) {
-    ESP_LOGE(TAG, "FAILED: Downloaded state3 should NOT have memory regions.");
+  // Make sure the same number of regions are returned.
+  if (state3.regions.size() != state1.regions.size()) {
+    ESP_LOGE(TAG, "FAILED: Downloaded state3 does not have expected number of memory regions.");
     return;
+  }
+
+  // Make sure that none of the regions have data.
+  for (int i = 0; i < state3.regions.size(); ++i) {
+    if (state3.regions[i].data.get() != NULL) {
+      ESP_LOGE(TAG, "FAILED: Downloaded state3 should not contain memory region data.");
+      return;
+    }
   }
 
   ESP_LOGI(TAG, "testUploadDownloadSystemState()...SUCCESS");
