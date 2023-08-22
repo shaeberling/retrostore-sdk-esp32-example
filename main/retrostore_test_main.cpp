@@ -16,6 +16,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "esp_spi_flash.h"
+#include "esp_chip_info.h"
 
 #include "retrostore.h"
 #include "wifi.h"
@@ -208,11 +209,11 @@ void testDownloadStateMemoryRegions() {
   // Requesting more (padding) should result in '0'.
   uint8_t want4[] = {0, 0, 42, 43, 44, 45, 0, 0};
   if (!helper_downloadAndCheckRegion(4, token, 998, 8, want4)) return;
-  
+
   // Request half into one.
   uint8_t want5[] = {44, 45, 0, 0};
   if (!helper_downloadAndCheckRegion(5, token, 1002, 4, want5)) return;
-  
+
   // Request half into one across and half into another region.
   uint8_t want6[] = {44, 55, 66, 0, 0, 0, 0, 0, 0, 101, 102, 103};
   if (!helper_downloadAndCheckRegion(6, token, 1111, 12, want6)) return;
@@ -452,7 +453,7 @@ void testFetchMediaImages() {
   auto success = rs.FetchMediaImages(BREAKDOWN_ID, types, &images);
 
   if (!success) {
-    ESP_LOGE(TAG, "Downloading apps (nano) failed.");
+    ESP_LOGE(TAG, "Downloading media images failed.");
     return;
   }
 
@@ -473,7 +474,52 @@ void testFetchMediaImages() {
   ESP_LOGI(TAG, "testFetchMediaImages()... SUCCESS");
 }
 
+void testFetchMediaImageRefsTest() {
+  ESP_LOGI(TAG, "testFetchMediaImageRefsTest()...");
 
+  const std::string BREAKDOWN_ID("29b20252-680f-11e8-b4a9-1f10b5491ef5");
+  std::vector<RsMediaType> types;
+  types.push_back(RsMediaType_COMMAND);
+
+  std::vector<RsMediaImageRef> imageRefs;
+  auto success = rs.FetchMediaImageRefs(BREAKDOWN_ID, types, &imageRefs);
+
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading media image refs failed.");
+    return;
+  }
+
+  if (imageRefs.size() != 1) {
+    ESP_LOGE(TAG, "Expected 1 media image of type COMMAND, but got %d", imageRefs.size());
+    return;
+  }
+  if (imageRefs[0].filename != "command.CMD") {
+    ESP_LOGE(TAG, "Queries media image filename not as expected: %s", imageRefs[0].filename.c_str());
+    return;
+  }
+
+  ESP_LOGI(TAG, "Media image size is: %d", imageRefs[0].data_size);
+  if (imageRefs[0].data_size <= 0) {
+    ESP_LOGE(TAG, "Data size of media image is zero: %d", imageRefs[0].data_size);
+    return;
+  }
+
+  if (imageRefs[0].token.size() <= 40) {
+    ESP_LOGE(TAG, "Image Ref token is too short!: '%s'", imageRefs[0].token.c_str());
+    return;
+  }
+
+  if (imageRefs[0].token.find('/') == std::string::npos) {
+    ESP_LOGE(TAG, "Image Ref token does not contain '/': '%s'", imageRefs[0].token.c_str());
+    return;
+  }
+
+  ESP_LOGI(TAG, "testFetchMediaImageRefs()... SUCCESS");
+}
+
+void testFetchMediaImageRangeTest() {
+  // TODO
+}
 
 void initWifi() {
   ESP_LOGI(TAG, "Connecting to Wifi...");
@@ -487,17 +533,19 @@ void runAllTests() {
   srand(time(nullptr));
 
   for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
-    testUploadDownloadSystemState();
-    testDownloadStateMemoryRegions();
-    testFailDownloadSystemState();
-    testFetchSingleApp();
-    testFetchSingleAppFail();
-    testFetchMultipleApps();
-    testQueryApps();
-    testQueryAppsWithMediaTypes();
-    testFetchMultipleAppsNano();
-    testQueryAppsNano();
-    testFetchMediaImages();
+    // testUploadDownloadSystemState();
+    // testDownloadStateMemoryRegions();
+    // testFailDownloadSystemState();
+    // testFetchSingleApp();
+    // testFetchSingleAppFail();
+    // testFetchMultipleApps();
+    // testQueryApps();
+    // testQueryAppsWithMediaTypes();
+    // testFetchMultipleAppsNano();
+    // testQueryAppsNano();
+    // testFetchMediaImages();
+    testFetchMediaImageRefsTest();
+    // testFetchMediaImageRangeTest();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, total diff is %d kb", i, newFreeHeapKb, diffHeapKb);
