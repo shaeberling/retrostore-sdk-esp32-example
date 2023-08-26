@@ -128,26 +128,56 @@ void testUploadDownloadSystemState() {
   ESP_LOGI(TAG, "testUploadDownloadSystemState()...SUCCESS");
 }
 
-bool helper_downloadAndCheckRegion(int n, int token, int start, int length, const uint8_t* want) {
-  RsMemoryRegion region;
-  if (!rs.DownloadStateMemoryRange(token, start, length, &region)) {
-    ESP_LOGE(TAG, "n=%d Downloading memory regions failed.", n);
-    return false;
-  }
+bool helper_checkRegion(const RsMemoryRegion& region, int length, const uint8_t* want) {
   if (region.length != length) {
-    ESP_LOGE(TAG, "n=%d Received data length does not match request: %d vs %d",
-             n, region.length, length);
+    ESP_LOGE(TAG, "Received data length does not match request: %d vs %d",
+             region.length, length);
     return false;
   }
   bool success = true;
   for (int i = 0; i < length; ++i) {
     if (region.data.get()[i] != want[i]) {
-      ESP_LOGE(TAG, "n=%d Recv data at idx=%d does not match. (%d vs %d)",
-              n, i, region.data.get()[i], want[i]);
+      ESP_LOGE(TAG, "Recv data at idx=%d does not match. (%d vs %d)",
+              i, region.data.get()[i], want[i]);
       success = false;
     }
   }
   return success;
+}
+
+bool helper_downloadAndCheckMemoryRegion(int n, int token, int start, int length, const uint8_t* want) {
+  RsMemoryRegion region;
+  if (!rs.DownloadStateMemoryRange(token, start, length, &region)) {
+    ESP_LOGE(TAG, "n=%d Downloading memory regions failed.", n);
+    return false;
+  }
+  return helper_checkRegion(region, length, want);
+}
+
+bool helper_checkMediaRegion(const RsMediaRegion& region, int length, const uint8_t* want) {
+  if (region.length != length) {
+    ESP_LOGE(TAG, "Received data length does not match request: %d vs %d",
+             region.length, length);
+    return false;
+  }
+  bool success = true;
+  for (int i = 0; i < length; ++i) {
+    if (region.data.get()[i] != want[i]) {
+      ESP_LOGE(TAG, "Recv data at idx=%d does not match. (%d vs %d)",
+              i, region.data.get()[i], want[i]);
+      success = false;
+    }
+  }
+  return success;
+}
+
+bool helper_downloadAndCheckMediaImageRegion(const RsMediaImageRef& ref, int start, int length, const uint8_t* want) {
+  RsMediaRegion region;
+  if (!rs.FetchMediaImageRegion(ref, start, length, &region)) {
+    ESP_LOGE(TAG, "token=%s Fetching media image region failed.", ref.token.c_str());
+    return false;
+  }
+  return helper_checkMediaRegion(region, length, want);
 }
 
 void testDownloadStateMemoryRegions() {
@@ -198,25 +228,25 @@ void testDownloadStateMemoryRegions() {
 
   // Exact match of uploads
   uint8_t want1[] = {42, 43, 44, 45};
-  if (!helper_downloadAndCheckRegion(1, token, 1000, 4, want1)) return;
+  if (!helper_downloadAndCheckMemoryRegion(1, token, 1000, 4, want1)) return;
   uint8_t want2[] = {11, 22, 33, 44, 55, 66};
-  if (!helper_downloadAndCheckRegion(2, token, 1108, 6, want2)) return;
+  if (!helper_downloadAndCheckMemoryRegion(2, token, 1108, 6, want2)) return;
 
   // Requesting two connected regions at once..
   uint8_t want3[] = {1, 2, 3, 4, 5, 6, 7, 8, 11, 22, 33, 44, 55, 66};
-  if (!helper_downloadAndCheckRegion(3, token, 1100, 14, want3)) return;
+  if (!helper_downloadAndCheckMemoryRegion(3, token, 1100, 14, want3)) return;
 
   // Requesting more (padding) should result in '0'.
   uint8_t want4[] = {0, 0, 42, 43, 44, 45, 0, 0};
-  if (!helper_downloadAndCheckRegion(4, token, 998, 8, want4)) return;
+  if (!helper_downloadAndCheckMemoryRegion(4, token, 998, 8, want4)) return;
 
   // Request half into one.
   uint8_t want5[] = {44, 45, 0, 0};
-  if (!helper_downloadAndCheckRegion(5, token, 1002, 4, want5)) return;
+  if (!helper_downloadAndCheckMemoryRegion(5, token, 1002, 4, want5)) return;
 
   // Request half into one across and half into another region.
   uint8_t want6[] = {44, 55, 66, 0, 0, 0, 0, 0, 0, 101, 102, 103};
-  if (!helper_downloadAndCheckRegion(6, token, 1111, 12, want6)) return;
+  if (!helper_downloadAndCheckMemoryRegion(6, token, 1111, 12, want6)) return;
 
   ESP_LOGI(TAG, "testDownloadStateMemoryRegions()...SUCCESS");
 }
@@ -518,7 +548,54 @@ void testFetchMediaImageRefsTest() {
 }
 
 void testFetchMediaImageRangeTest() {
-  // TODO
+  ESP_LOGI(TAG, "testFetchMediaImageRangeTest()...");
+
+  const std::string BREAKDOWN_ID("29b20252-680f-11e8-b4a9-1f10b5491ef5");
+  std::vector<RsMediaType> types;
+  types.push_back(RsMediaType_COMMAND);
+  std::vector<RsMediaImageRef> imageRefs;
+  auto success = rs.FetchMediaImageRefs(BREAKDOWN_ID, types, &imageRefs);
+  if (!success) {
+    ESP_LOGE(TAG, "Downloading media image refs failed.");
+    return;
+  }
+
+  // Start region
+  uint8_t want1[] = {1, 2, 0, 128, 49, 0, 155, 243, 205, 228};
+  if (!helper_downloadAndCheckMediaImageRegion(imageRefs[0], 0, 10, want1)) {
+    ESP_LOGE(TAG, "ERROR: Failed downloading media image region #1.");
+    return;
+  }
+
+  // End region
+  uint8_t want2[] = {2, 24, 224, 27, 24, 194, 2, 2, 0, 128};
+  if (!helper_downloadAndCheckMediaImageRegion(imageRefs[0], imageRefs[0].data_size-10, 10, want2)) {
+    ESP_LOGE(TAG, "ERROR: Failed downloading media image region #3.");
+    return;
+  }
+
+  // A random region in the middle.
+  uint8_t want3[] = {254, 200, 40, 35, 254, 75, 40, 26, 254, 10};
+  if (!helper_downloadAndCheckMediaImageRegion(imageRefs[0], 1242, 10, want3)) {
+    ESP_LOGE(TAG, "ERROR: Failed downloading media image region #3.");
+    return;
+  }
+
+  ESP_LOGI(TAG, "testFetchMediaImageRangeTest()...SUCCESS");
+}
+
+void testFailFetchMediaImageRangeTest() {
+  ESP_LOGI(TAG, "testFailFetchMediaImageRangeTest()...");
+
+  RsMediaImageRef ref = {};
+  ref.token = "non-existent token";
+  RsMediaRegion region;
+  auto success = rs.FetchMediaImageRegion(ref, 0, 42, &region);
+  if (success) {
+    ESP_LOGE(TAG, "ERROR: Fetching media image region failed.");
+    return;
+  }
+  ESP_LOGI(TAG, "testFailFetchMediaImageRangeTest()...SUCCESS");
 }
 
 void initWifi() {
@@ -533,19 +610,20 @@ void runAllTests() {
   srand(time(nullptr));
 
   for (int i = 0; i < NUM_TEST_ITERATIONS; ++i) {
-    // testUploadDownloadSystemState();
-    // testDownloadStateMemoryRegions();
-    // testFailDownloadSystemState();
-    // testFetchSingleApp();
-    // testFetchSingleAppFail();
-    // testFetchMultipleApps();
-    // testQueryApps();
-    // testQueryAppsWithMediaTypes();
-    // testFetchMultipleAppsNano();
-    // testQueryAppsNano();
-    // testFetchMediaImages();
+    testUploadDownloadSystemState();
+    testDownloadStateMemoryRegions();
+    testFailDownloadSystemState();
+    testFetchSingleApp();
+    testFetchSingleAppFail();
+    testFetchMultipleApps();
+    testQueryApps();
+    testQueryAppsWithMediaTypes();
+    testFetchMultipleAppsNano();
+    testQueryAppsNano();
+    testFetchMediaImages();
     testFetchMediaImageRefsTest();
-    // testFetchMediaImageRangeTest();
+    testFailFetchMediaImageRangeTest();
+    testFetchMediaImageRangeTest();
     auto newFreeHeapKb = esp_get_free_heap_size() / 1024;
     auto diffHeapKb =  initialFreeHeapKb - newFreeHeapKb;
     ESP_LOGI(TAG, "After run [%d], free heap is %d, total diff is %d kb", i, newFreeHeapKb, diffHeapKb);
